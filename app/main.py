@@ -1,21 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1 import auth, profile, sleep_data, insights
-from app.database import engine, Base
 import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Create database tables (only if engine is configured)
-if engine is not None:
-    try:
-        Base.metadata.create_all(bind=engine)
-        logger.info("Database tables initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize database tables: {e}")
-else:
-    logger.warning("DATABASE_URL not set — skipping table creation. DB endpoints will fail.")
 
 app = FastAPI(
     title="SmartSleep API",
@@ -42,7 +31,6 @@ The SmartSleep API provides a comprehensive backend for the Personalized Sleep Q
     },
 )
 
-# CORS configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -51,15 +39,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include Routers
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(profile.router, prefix="/api/v1/profile", tags=["Profile"])
 app.include_router(sleep_data.router, prefix="/api/v1/sleep", tags=["Sleep Data"])
 app.include_router(insights.router, prefix="/api/v1/insights", tags=["Insights"])
 
+
 @app.get("/")
 def root():
     return {"message": "Welcome to SmartSleep API"}
+
 
 if __name__ == "__main__":
     import uvicorn

@@ -1,11 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from typing import List
+import uuid
 from app.api import deps
 from app.database import get_db
-from app.models.user import User
-from app.models.raw_sleep_data import RawSleepData
-from app.models.derived_sleep_data import DerivedSleepData
 from app.schemas.sleep_data import RawSleepDataCreate, RawSleepDataResponse
 from app.schemas.analysis import DerivedSleepDataResponse, UserFeedback
 from app.services.sleep_analysis_service import process_daily_sleep
@@ -15,81 +12,68 @@ router = APIRouter()
 @router.post("/ingest", response_model=RawSleepDataResponse)
 def ingest_sleep_data(
     data_in: RawSleepDataCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(deps.get_current_user)
+    db=Depends(get_db),
+    current_user=Depends(deps.get_current_user),
 ):
-    """
-    Ingest raw sleep and lifestyle data.
+    raw_id = str(uuid.uuid4())
+    raw_data = {"raw_id": raw_id, "user_id": current_user.user_id}
+    for k, v in data_in.model_dump().items():
+        raw_data[k] = v.isoformat() if hasattr(v, "isoformat") else v
 
-    Upon ingestion, automatically triggers the analysis pipeline to calculate
-    derived metrics and a sleep quality score.
-    """
-    db_raw = RawSleepData(
-        **data_in.model_dump(),
-        user_id=current_user.user_id
-    )
-    db.add(db_raw)
-    db.commit()
-    db.refresh(db_raw)
-
-    process_daily_sleep(db, db_raw.raw_id, current_user)
-
-    return db_raw
+    result = db.table("raw_sleep_data").insert(raw_data).execute()
+    process_daily_sleep(db, raw_id, current_user)
+    return result.data[0]
 
 
 @router.get("/history", response_model=List[DerivedSleepDataResponse])
-def get_sleep_history(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(deps.get_current_user)
-):
-    """Retrieve all analysed sleep records for the current user, newest first."""
-    return (
-        db.query(DerivedSleepData)
-        .filter(DerivedSleepData.user_id == current_user.user_id)
-        .order_by(DerivedSleepData.date.desc())
-        .all()
+def get_sleep_history(db=Depends(get_db), current_user=Depends(deps.get_current_user)):
+    result = (
+        db.table("derived_sleep_data")
+        .select("*")
+        .eq("user_id", current_user.user_id)
+        .order("date", desc=True)
+        .execute()
     )
+    return result.data
 
 
 @router.get("/analysis/latest", response_model=DerivedSleepDataResponse)
-def get_latest_analysis(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(deps.get_current_user)
-):
-    """Return the most recent sleep analysis result for the current user."""
-    record = (
-        db.query(DerivedSleepData)
-        .filter(DerivedSleepData.user_id == current_user.user_id)
-        .order_by(DerivedSleepData.date.desc())
-        .first()
+def get_latest_analysis(db=Depends(get_db), current_user=Depends(deps.get_current_user)):
+    result = (
+        db.table("derived_sleep_data")
+        .select("*")
+        .eq("user_id", current_user.user_id)
+        .order("date", desc=True)
+        .limit(1)
+        .execute()
     )
-    if not record:
+    if not result.data:
         raise HTTPException(status_code=404, detail="No analysis records found.")
-    return record
+    return result.data[0]
 
 
 @router.post("/analysis/feedback", response_model=DerivedSleepDataResponse)
 def submit_feedback(
     feedback: UserFeedback,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(deps.get_current_user)
+    db=Depends(get_db),
+    current_user=Depends(deps.get_current_user),
 ):
-    """
-    Submit subjective feedback on the most recent sleep analysis.
-
-    Updates user_score and user_class on the latest derived record.
-    """
-    record = (
-        db.query(DerivedSleepData)
-        .filter(DerivedSleepData.user_id == current_user.user_id)
-        .order_by(DerivedSleepData.date.desc())
-        .first()
+    latest = (
+        db.table("derived_sleep_data")
+        .select("derived_id")
+        .eq("user_id", current_user.user_id)
+        .order("date", desc=True)
+        .limit(1)
+        .execute()
     )
-    if not record:
+    if not latest.data:
         raise HTTPException(status_code=404, detail="No analysis records found.")
 
-    record.user_score = feedback.user_score
-    record.user_class = feedback.user_class
-    db.commit()
-    db.refresh(record)
-    return record
+    derived_id = latest.data[0]["derived_id"]
+    result = (
+        db.table("derived_sleep_data")
+        .update({"user_score": feedback.user_score, "user_class": feedback.user_class})
+        .eq("derived_id", derived_id)
+        .execute()
+    )
+    return result.data[0]
