@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from app.api import deps
 from app.database import get_db
+from app.db.supabase_client import exec
 from app.schemas.profile import UserResponse, UserUpdate
 
 router = APIRouter()
@@ -18,6 +19,7 @@ def update_user_me(
 ):
     update_data = {k: v for k, v in user_in.model_dump().items() if v is not None}
     if update_data:
-        result = db.table("users").update(update_data).eq("user_id", current_user.user_id).execute()
-        return result.data[0]
+        rows = exec(db.table("users").update(update_data).eq("user_id", current_user.user_id))
+        if rows:
+            return rows[0]
     return vars(current_user)

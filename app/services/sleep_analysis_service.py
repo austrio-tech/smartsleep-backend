@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 import uuid
+from app.db.supabase_client import exec
 from app.core.feature_engineering import compute_features
 from app.core.rule_analyzer import calculate_base_score, calculate_penalties
 from app.core.scoring import blend_scores
@@ -8,11 +9,12 @@ from app.core.ml.predictor import predictor
 
 
 def process_daily_sleep(db, raw_id: str, user):
-    result = db.table("raw_sleep_data").select("*").eq("raw_id", raw_id).maybe_single().execute()
-    if not result.data:
+    rows = exec(db.table("raw_sleep_data").select("*").eq("raw_id", raw_id))
+    if not rows:
         return None
 
-    raw_data = SimpleNamespace(**result.data)
+    raw_dict = rows[0]
+    raw_data = SimpleNamespace(**raw_dict)
 
     # 1. Feature engineering
     features = compute_features(raw_data)
@@ -23,13 +25,12 @@ def process_daily_sleep(db, raw_id: str, user):
 
     # 3. ML prediction
     predictor.load_user_models(user.user_id)
-    feature_vector = [
+    ml_score, user_class = predictor.predict([[
         features["sleep_eff"],
         features["interrupt_index"],
         features["caff_gap_hours"],
         features["screen_impact"],
-    ]
-    ml_score, user_class = predictor.predict([feature_vector])
+    ]])
 
     # 4. Score blending
     final_score_raw = base_score - penalty
@@ -39,11 +40,11 @@ def process_daily_sleep(db, raw_id: str, user):
 
     # 5. Persist derived record
     derived_id = str(uuid.uuid4())
-    db.table("derived_sleep_data").insert({
+    exec(db.table("derived_sleep_data").insert({
         "derived_id": derived_id,
         "user_id": user.user_id,
         "raw_id": raw_id,
-        "date": result.data["record_date"],
+        "date": raw_dict["record_date"],
         **features,
         "penalty": penalty,
         "base_score": base_score,
@@ -51,19 +52,19 @@ def process_daily_sleep(db, raw_id: str, user):
         "final_score_raw": final_score_raw,
         "final_score": final_score,
         "user_class": user_class,
-    }).execute()
+    }))
 
     # 6. Update Welford stats
-    stats_res = db.table("user_stat").select("*").eq("user_id", user.user_id).maybe_single().execute()
-    stats = stats_res.data or {"mean_hr_rest": 0.0, "std_hr_rest": 0.0, "sample_count": 0}
+    stat_rows = exec(db.table("user_stat").select("*").eq("user_id", user.user_id))
+    stats = stat_rows[0] if stat_rows else {"mean_hr_rest": 0.0, "std_hr_rest": 0.0, "sample_count": 0}
 
-    if result.data.get("hr_rest"):
+    if raw_dict.get("hr_rest"):
         new_mean, new_std, new_count = update_stats(
-            stats["mean_hr_rest"], stats["std_hr_rest"], stats["sample_count"], result.data["hr_rest"]
+            stats["mean_hr_rest"], stats["std_hr_rest"], stats["sample_count"], raw_dict["hr_rest"]
         )
-        db.table("user_stat").upsert({
+        exec(db.table("user_stat").upsert({
             "user_id": user.user_id,
             "mean_hr_rest": new_mean,
             "std_hr_rest": new_std,
             "sample_count": new_count,
-        }).execute()
+        }))

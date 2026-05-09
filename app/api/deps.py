@@ -3,6 +3,7 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from types import SimpleNamespace
 from app.database import get_db
+from app.db.supabase_client import exec
 from app.config import settings
 from app.schemas.auth import TokenData
 
@@ -26,7 +27,7 @@ def get_current_user(
     except JWTError:
         raise credentials_exception
 
-    result = db.table("users").select("*").eq("email", token_data.email).maybe_single().execute()
-    if result.data is None:
+    rows = exec(db.table("users").select("*").eq("email", token_data.email))
+    if not rows:
         raise credentials_exception
-    return SimpleNamespace(**result.data)
+    return SimpleNamespace(**rows[0])
