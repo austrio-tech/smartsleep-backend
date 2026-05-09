@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.v1 import auth, profile, sleep_data
+from app.api.v1 import auth, profile, sleep_data, insights
 from app.database import engine, Base
 import logging
 
@@ -55,6 +55,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(profile.router, prefix="/api/v1/profile", tags=["Profile"])
 app.include_router(sleep_data.router, prefix="/api/v1/sleep", tags=["Sleep Data"])
+app.include_router(insights.router, prefix="/api/v1/insights", tags=["Insights"])
 
 @app.get("/")
 def root():

@@ -7,7 +7,7 @@ from app.models.user import User
 from app.models.raw_sleep_data import RawSleepData
 from app.models.derived_sleep_data import DerivedSleepData
 from app.schemas.sleep_data import RawSleepDataCreate, RawSleepDataResponse
-from app.schemas.analysis import DerivedSleepDataResponse
+from app.schemas.analysis import DerivedSleepDataResponse, UserFeedback
 from app.services.sleep_analysis_service import process_daily_sleep
 
 router = APIRouter()
@@ -20,9 +20,8 @@ def ingest_sleep_data(
 ):
     """
     Ingest raw sleep and lifestyle data.
-    
-    This endpoint accepts pre-sleep and post-sleep metrics. 
-    Upon ingestion, it automatically triggers the analysis pipeline to calculate 
+
+    Upon ingestion, automatically triggers the analysis pipeline to calculate
     derived metrics and a sleep quality score.
     """
     db_raw = RawSleepData(
@@ -32,23 +31,65 @@ def ingest_sleep_data(
     db.add(db_raw)
     db.commit()
     db.refresh(db_raw)
-    
-    # Trigger analysis
+
     process_daily_sleep(db, db_raw.raw_id, current_user)
-    
+
     return db_raw
+
 
 @router.get("/history", response_model=List[DerivedSleepDataResponse])
 def get_sleep_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
+    """Retrieve all analysed sleep records for the current user, newest first."""
+    return (
+        db.query(DerivedSleepData)
+        .filter(DerivedSleepData.user_id == current_user.user_id)
+        .order_by(DerivedSleepData.date.desc())
+        .all()
+    )
+
+
+@router.get("/analysis/latest", response_model=DerivedSleepDataResponse)
+def get_latest_analysis(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    """Return the most recent sleep analysis result for the current user."""
+    record = (
+        db.query(DerivedSleepData)
+        .filter(DerivedSleepData.user_id == current_user.user_id)
+        .order_by(DerivedSleepData.date.desc())
+        .first()
+    )
+    if not record:
+        raise HTTPException(status_code=404, detail="No analysis records found.")
+    return record
+
+
+@router.post("/analysis/feedback", response_model=DerivedSleepDataResponse)
+def submit_feedback(
+    feedback: UserFeedback,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
     """
-    Retrieve historical sleep analysis results for the current user.
-    
-    Returns a list of analysis records including scores, derived metrics, and dates.
+    Submit subjective feedback on the most recent sleep analysis.
+
+    Updates user_score and user_class on the latest derived record.
     """
-    history = db.query(DerivedSleepData).filter(
-        DerivedSleepData.user_id == current_user.user_id
-    ).order_by(DerivedSleepData.date.desc()).all()
-    return history
+    record = (
+        db.query(DerivedSleepData)
+        .filter(DerivedSleepData.user_id == current_user.user_id)
+        .order_by(DerivedSleepData.date.desc())
+        .first()
+    )
+    if not record:
+        raise HTTPException(status_code=404, detail="No analysis records found.")
+
+    record.user_score = feedback.user_score
+    record.user_class = feedback.user_class
+    db.commit()
+    db.refresh(record)
+    return record

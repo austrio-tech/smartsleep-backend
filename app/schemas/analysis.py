@@ -33,3 +33,9 @@ class DerivedSleepDataResponse(BaseModel):
 class UserFeedback(BaseModel):
     user_score: float = Field(..., description="Ground truth score provided by user (0-100)", ge=0, le=100, example=90.0)
     user_class: Optional[str] = Field(None, description="User's subjective classification", example="Excellent")
+
+
+class Recommendation(BaseModel):
+    category: str = Field(..., description="Area of improvement", example="Caffeine")
+    message: str = Field(..., description="Actionable advice for the user")
+    priority: str = Field(..., description="Urgency level: 'high', 'medium', or 'low'", example="medium")
