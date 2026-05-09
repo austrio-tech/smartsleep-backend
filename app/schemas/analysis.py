@@ -2,40 +2,52 @@ from pydantic import BaseModel, Field
 from typing import Optional
 import datetime
 
+
 class DerivedSleepDataResponse(BaseModel):
-    derived_id: str = Field(..., description="Unique ID for the analysis result")
-    user_id: str = Field(..., description="The user's ID")
-    raw_id: str = Field(..., description="The source raw data ID")
-    date: datetime.date = Field(..., description="Analysis date", example="2024-04-23")
-    
-    # Derived Metrics
-    sleep_eff: Optional[float] = Field(None, description="Calculated sleep efficiency (0-1)", example=0.88)
-    interrupt_index: Optional[float] = Field(None, description="Calculated interruption index", example=0.25)
-    consistency_7d: Optional[float] = Field(None, description="7-day sleep consistency score", example=0.92)
-    caff_gap_hours: Optional[float] = Field(None, description="Hours between last caffeine and sleep", example=7.5)
-    caff_impact: Optional[float] = Field(None, description="Calculated impact of caffeine on sleep", example=0.05)
-    screen_impact: Optional[float] = Field(None, description="Calculated impact of screen time", example=0.1)
-    act_gap_hours: Optional[float] = Field(None, description="Hours between last activity and sleep", example=3.0)
-    
+    derived_id: str
+    user_id:    str
+    raw_id:     str
+    date:       datetime.date
+
+    # Step 2 — Core sleep metrics
+    tib:             Optional[float] = Field(None, description="Time in Bed (hours)")
+    tst:             Optional[float] = Field(None, description="Total Sleep Time (hours)")
+    sleep_eff:       Optional[float] = Field(None, description="Sleep Efficiency (0-1)")
+    interrupt_index: Optional[float] = Field(None, description="Interruption Index")
+    consistency_7d:  Optional[float] = Field(None, description="7-day sleep schedule consistency (0-1)")
+
+    # Step 3 — Lifestyle
+    caff_gap_hours: Optional[float] = Field(None, description="Hours between last caffeine and sleep")
+    caff_impact:    Optional[float] = Field(None, description="Caffeine impact factor (0.1 / 0.5 / 1.0)")
+    screen_impact:  Optional[float] = Field(None, description="Screen exposure impact")
+    act_gap_hours:  Optional[float] = Field(None, description="Activity intensity impact")
+
+    # Steps 4-6 — Bio / Psych / Env
+    bio_ready:  Optional[float] = Field(None, description="Biological Readiness Score (0-1)")
+    psych_load: Optional[float] = Field(None, description="Psychological Load (0-1)")
+    env_score:  Optional[float] = Field(None, description="Environmental Quality Score (0-1)")
+
     # Scoring
-    penalty: float = Field(..., description="Total penalties applied", example=5.0)
-    base_score: Optional[float] = Field(None, description="Rule-based base score (0-100)", example=85.0)
-    ml_score: Optional[float] = Field(None, description="Machine Learning predicted score (0-100)", example=82.5)
-    final_score_raw: Optional[float] = Field(None, description="Final blended score before rounding", example=83.75)
-    user_score: Optional[float] = Field(None, description="Actual user feedback score", example=85.0)
-    user_class: Optional[str] = Field(None, description="Predicted or actual classification", example="Good")
-    final_score: Optional[int] = Field(None, description="Final rounded sleep quality score", example=84)
+    penalty:         float
+    base_score:      Optional[float] = Field(None, description="Rule-based base score (0-1)")
+    ml_score:        Optional[float] = Field(None, description="ML predicted score (0-100)")
+    final_score_raw: Optional[float] = Field(None, description="Final blended score before clamping")
+    final_score:     Optional[int]   = Field(None, description="Final sleep quality score (0-100)")
+    user_score:      Optional[float] = Field(None, description="User's own rating (0-100)")
+    user_class:      Optional[str]   = Field(None, description="Excellent / Good / Fair / Poor")
+
     created_at: datetime.datetime
 
     class Config:
         from_attributes = True
 
+
 class UserFeedback(BaseModel):
-    user_score: float = Field(..., description="Ground truth score provided by user (0-100)", ge=0, le=100, example=90.0)
-    user_class: Optional[str] = Field(None, description="User's subjective classification", example="Excellent")
+    user_score: float = Field(..., ge=0, le=100, description="User's own sleep rating (0-100)")
+    user_class: Optional[str] = Field(None, description="Excellent / Good / Fair / Poor")
 
 
 class Recommendation(BaseModel):
-    category: str = Field(..., description="Area of improvement", example="Caffeine")
-    message: str = Field(..., description="Actionable advice for the user")
-    priority: str = Field(..., description="Urgency level: 'high', 'medium', or 'low'", example="medium")
+    category: str = Field(..., description="Area of improvement")
+    message:  str = Field(..., description="Actionable advice")
+    priority: str = Field(..., description="high / medium / low")

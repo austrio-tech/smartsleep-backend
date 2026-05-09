@@ -6,9 +6,10 @@ from app.database import get_db
 from app.db.supabase_client import exec
 from app.schemas.sleep_data import RawSleepDataCreate, RawSleepDataResponse
 from app.schemas.analysis import DerivedSleepDataResponse, UserFeedback
-from app.services.sleep_analysis_service import process_daily_sleep
+from app.services.sleep_analysis_service import process_daily_sleep, trigger_training
 
 router = APIRouter()
+
 
 @router.post("/ingest", response_model=RawSleepDataResponse)
 def ingest_sleep_data(
@@ -56,6 +57,7 @@ def submit_feedback(
     db=Depends(get_db),
     current_user=Depends(deps.get_current_user),
 ):
+    # Get latest derived record
     latest = exec(
         db.table("derived_sleep_data")
         .select("derived_id")
@@ -66,9 +68,16 @@ def submit_feedback(
     if not latest:
         raise HTTPException(status_code=404, detail="No analysis records found.")
 
+    derived_id = latest[0]["derived_id"]
+
+    # Persist user labels
     rows = exec(
         db.table("derived_sleep_data")
         .update({"user_score": feedback.user_score, "user_class": feedback.user_class})
-        .eq("derived_id", latest[0]["derived_id"])
+        .eq("derived_id", derived_id)
     )
-    return rows[0]
+
+    # Steps 11-14: store training sample + trigger online learning
+    trigger_training(db, derived_id, current_user.user_id, feedback.user_score, feedback.user_class)
+
+    return rows[0] if rows else latest[0]

@@ -8,58 +8,50 @@ from app.schemas.analysis import Recommendation
 router = APIRouter()
 
 
-def _build_recommendations(record: dict) -> List[Recommendation]:
+def _build_recommendations(r: dict) -> List[Recommendation]:
     recs = []
 
-    sleep_eff = record.get("sleep_eff")
-    interrupt_index = record.get("interrupt_index")
-    caff_impact = record.get("caff_impact")
-    screen_impact = record.get("screen_impact")
-    consistency_7d = record.get("consistency_7d")
-    caff_gap_hours = record.get("caff_gap_hours")
+    if (r.get("sleep_eff") or 1) < 0.75:
+        recs.append(Recommendation(category="Sleep Efficiency", priority="high",
+            message="Sleep efficiency below 75%. Go to bed only when sleepy and rise at the same time daily."))
 
-    if sleep_eff is not None and sleep_eff < 0.80:
-        recs.append(Recommendation(
-            category="Sleep Efficiency",
-            message="Your sleep efficiency is below 80%. Try going to bed only when sleepy and getting up at the same time each day.",
-            priority="high",
-        ))
-    if interrupt_index is not None and interrupt_index > 0.30:
-        recs.append(Recommendation(
-            category="Sleep Continuity",
-            message="You had frequent awakenings. Consider earplugs, a white-noise machine, or checking for sleep apnea.",
-            priority="high",
-        ))
-    if caff_impact is not None and caff_impact > 0.10:
-        recs.append(Recommendation(
-            category="Caffeine",
-            message="Caffeine is affecting your sleep. Avoid caffeine at least 6 hours before bed.",
-            priority="medium",
-        ))
-    if screen_impact is not None and screen_impact > 0.10:
-        recs.append(Recommendation(
-            category="Screen Time",
-            message="Screen exposure before bed is impacting sleep quality. Stop screens at least 30 minutes before sleep.",
-            priority="medium",
-        ))
-    if consistency_7d is not None and consistency_7d < 0.75:
-        recs.append(Recommendation(
-            category="Sleep Schedule",
-            message="Your sleep schedule is inconsistent. Maintaining a regular sleep and wake time strengthens your circadian rhythm.",
-            priority="medium",
-        ))
-    if caff_gap_hours is not None and caff_gap_hours < 6.0:
-        recs.append(Recommendation(
-            category="Caffeine Timing",
-            message=f"Your last caffeine was only {caff_gap_hours:.1f}h before sleep. Aim for at least 6 hours gap.",
-            priority="medium",
-        ))
+    if (r.get("interrupt_index") or 0) > 0.3:
+        recs.append(Recommendation(category="Sleep Continuity", priority="high",
+            message="Frequent awakenings detected. Consider white noise, earplugs, or a sleep apnea evaluation."))
+
+    if (r.get("caff_impact") or 0) >= 0.5:
+        gap = r.get("caff_gap_hours") or 0
+        recs.append(Recommendation(category="Caffeine", priority="high" if gap < 4 else "medium",
+            message=f"Caffeine was consumed {gap:.1f}h before bed. Aim for at least 6 hours gap."))
+
+    if (r.get("screen_impact") or 0) > 0.25:
+        recs.append(Recommendation(category="Screen Time", priority="medium",
+            message="High screen exposure before bed. Stop screens 30-60 minutes before sleep."))
+
+    if (r.get("consistency_7d") or 1) < 0.75:
+        recs.append(Recommendation(category="Sleep Schedule", priority="medium",
+            message="Inconsistent sleep timing this week. A fixed sleep/wake schedule strengthens your circadian rhythm."))
+
+    if (r.get("psych_load") or 0) > 0.6:
+        recs.append(Recommendation(category="Stress & Mood", priority="medium",
+            message="High psychological load detected. Try a 10-minute wind-down routine: journaling, breathing, or light reading."))
+
+    if (r.get("bio_ready") or 1) < 0.4:
+        recs.append(Recommendation(category="Biological Readiness", priority="medium",
+            message="Your biometrics (HR, HRV, temperature) are outside your personal norm. Prioritise recovery today."))
+
+    if (r.get("env_score") or 1) < 0.5:
+        recs.append(Recommendation(category="Sleep Environment", priority="low",
+            message="Room conditions (temperature, noise, light) are suboptimal. Aim for 18-20°C, quiet, and darkness."))
+
+    if (r.get("tst") or 8) < 6:
+        recs.append(Recommendation(category="Sleep Duration", priority="high",
+            message=f"You only got {r.get('tst', 0):.1f}h of sleep. Adults need 7-9 hours for full cognitive recovery."))
+
     if not recs:
-        recs.append(Recommendation(
-            category="General",
-            message="Great job! Your sleep metrics look healthy. Keep maintaining your current routine.",
-            priority="low",
-        ))
+        recs.append(Recommendation(category="General", priority="low",
+            message="All metrics look healthy. Keep maintaining your current routine."))
+
     return recs
 
 
