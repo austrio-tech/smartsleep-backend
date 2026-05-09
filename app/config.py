@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 10080
 
-    database_url: str
+    database_url: Optional[str] = None
 
     # Supabase
     supabase_url: str

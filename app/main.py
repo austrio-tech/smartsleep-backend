@@ -7,13 +7,15 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Create database tables
-try:
-    Base.metadata.create_all(bind=engine)
-    logger.info("Database tables initialized successfully")
-except Exception as e:
-    logger.error(f"Failed to initialize database tables: {e}")
-    logger.warning("Application starting without database connection. Some endpoints will fail.")
+# Create database tables (only if engine is configured)
+if engine is not None:
+    try:
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize database tables: {e}")
+else:
+    logger.warning("DATABASE_URL not set — skipping table creation. DB endpoints will fail.")
 
 app = FastAPI(
     title="SmartSleep API",
