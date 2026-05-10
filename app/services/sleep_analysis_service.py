@@ -144,6 +144,41 @@ def process_daily_sleep(db, raw_id: str, user):
     new_stat["sample_count"] = current_n
     exec(db.table("user_stat").upsert(new_stat))
 
+    # ── 11. Send sleep report email (fire-and-forget) ─────────────────────────
+    try:
+        from app.services.email_service import send_email, render_template
+
+        def _fmt(h):
+            if not h:
+                return "N/A"
+            hh, mm = int(h), int((h - int(h)) * 60)
+            return f"{hh}h {mm}m"
+
+        score_bg = (
+            "linear-gradient(135deg,#16A34A,#15803D)" if final_score >= 85
+            else "linear-gradient(135deg,#2563EB,#1D4ED8)" if final_score >= 70
+            else "linear-gradient(135deg,#F59E0B,#D97706)" if final_score >= 50
+            else "linear-gradient(135deg,#EF4444,#DC2626)"
+        )
+        display_name = getattr(user, "full_name", None) or user.email.split("@")[0]
+        html = render_template(
+            "sleep_report.html",
+            NAME=display_name,
+            EMAIL=user.email,
+            SCORE=final_score,
+            CLASSIFICATION=user_class,
+            SCORE_BG=score_bg,
+            REPORT_DATE=raw_dict.get("record_date", "Today"),
+            DURATION=_fmt(features.get("tst")),
+            EFFICIENCY=f"{int((features.get('sleep_eff') or 0) * 100)}%",
+            CONSISTENCY=f"{int((features.get('consistency_7d') or 0) * 100)}%",
+            BIO_READY=f"{int((features.get('bio_ready') or 0) * 100)}%",
+        )
+        send_email(user.email, f"\U0001f319 SmartSleep Report — Score: {final_score}", html)
+    except Exception as _exc:
+        import logging
+        logging.getLogger(__name__).warning("Sleep report email failed: %s", _exc)
+
 
 def trigger_training(db, derived_id: str, user_id: str, user_score: float, user_class: str):
     """
