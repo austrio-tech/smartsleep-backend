@@ -18,6 +18,7 @@ def signup(user_in: UserCreate, db=Depends(get_db)):
         "user_id": str(uuid.uuid4()),
         "email": user_in.email,
         "password_hash": get_password_hash(user_in.password),
+        "full_name": user_in.full_name,
         "age": user_in.age,
         "gender": user_in.gender,
         "weight_kg": user_in.weight_kg,

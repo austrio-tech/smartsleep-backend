@@ -15,6 +15,7 @@ class UserLogin(BaseModel):
 class UserCreate(BaseModel):
     email: EmailStr = Field(..., example="newuser@example.com")
     password: str = Field(..., min_length=8, example="strong_pass_123")
+    full_name: Optional[str] = Field(None, max_length=120, example="John Doe")
     age: Optional[int] = Field(None, ge=0, le=120, example=25)
     gender: Optional[str] = Field(None, pattern="^(Male|Female|Other)$", example="Male")
     weight_kg: Optional[float] = Field(None, gt=0, example=70.5)

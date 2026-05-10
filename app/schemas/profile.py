@@ -4,12 +4,14 @@ from datetime import datetime
 
 class UserBase(BaseModel):
     email: EmailStr
+    full_name: Optional[str] = None
     age: Optional[int] = None
     gender: Optional[str] = None
     weight_kg: Optional[float] = None
     height_cm: Optional[float] = None
 
 class UserUpdate(BaseModel):
+    full_name: Optional[str] = None
     age: Optional[int] = None
     gender: Optional[str] = None
     weight_kg: Optional[float] = None

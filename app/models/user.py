@@ -10,6 +10,7 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
     email_verified = Column(Boolean, default=False)
+    full_name = Column(String(120))
     age = Column(Integer)
     gender = Column(String(10))
     weight_kg = Column(Float)
