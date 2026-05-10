@@ -45,6 +45,7 @@ graphify-output/
 *.log
 *.tmp
 *.bak
+*.pdf
 
 # Docs (auto-generated or private)
 *.md

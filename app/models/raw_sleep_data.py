@@ -41,4 +41,6 @@ class RawSleepData(Base):
     noise_db = Column(Integer)
     light_lux = Column(Integer)
     
+    pre_sleep_submitted_at = Column(DateTime(timezone=True))
+    post_sleep_submitted_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())

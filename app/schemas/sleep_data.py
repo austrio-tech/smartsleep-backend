@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Literal
 from datetime import date, time, datetime
 
 class RawSleepDataBase(BaseModel):
@@ -37,11 +37,15 @@ class RawSleepDataBase(BaseModel):
     light_lux: Optional[int] = Field(None, description="Average light level in lux", ge=0, example=5)
 
 class RawSleepDataCreate(RawSleepDataBase):
-    pass
+    phase: Literal["pre", "post"] = Field(
+        ..., description="Data phase: 'pre' for evening habits, 'post' for morning check-in"
+    )
 
 class RawSleepDataResponse(RawSleepDataBase):
     raw_id: str = Field(..., description="Unique ID for the raw data record")
     user_id: str = Field(..., description="The owner's user ID")
+    pre_sleep_submitted_at: Optional[datetime] = None
+    post_sleep_submitted_at: Optional[datetime] = None
     created_at: datetime
 
     class Config:

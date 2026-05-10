@@ -76,10 +76,8 @@ def process_daily_sleep(db, raw_id: str, user):
     final_score_raw = blend_scores(base_score, ml_score, learning_factor) - penalty
     final_score = int(round(max(0, min(100, final_score_raw))))
 
-    # ── 9. Persist derived record ─────────────────────────────────────────────
-    derived_id = str(uuid.uuid4())
-    exec(db.table("derived_sleep_data").insert({
-        "derived_id":      derived_id,
+    # ── 9. Persist derived record (upsert by raw_id) ─────────────────────────
+    derived_payload = {
         "user_id":         user.user_id,
         "raw_id":          raw_id,
         "date":            raw_dict["record_date"],
@@ -105,7 +103,21 @@ def process_daily_sleep(db, raw_id: str, user):
         "final_score_raw": final_score_raw,
         "final_score":     final_score,
         "user_class":      user_class,
-    }))
+    }
+
+    existing_derived = exec(
+        db.table("derived_sleep_data").select("derived_id").eq("raw_id", raw_id)
+    )
+    if existing_derived:
+        derived_id = existing_derived[0]["derived_id"]
+        exec(
+            db.table("derived_sleep_data")
+            .update(derived_payload)
+            .eq("derived_id", derived_id)
+        )
+    else:
+        derived_id = str(uuid.uuid4())
+        exec(db.table("derived_sleep_data").insert({"derived_id": derived_id, **derived_payload}))
 
     # ── 10. Update Welford stats (Step 4) ─────────────────────────────────────
     stats = user_stat or {
