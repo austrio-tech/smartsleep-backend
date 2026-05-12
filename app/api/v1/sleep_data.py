@@ -17,6 +17,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Body
 from typing import List, Optional
 import uuid
+import base64  # Used to encode the CSV as Base64 for the email attachment
+import re      # Used to sanitize the attachment filename (remove unsafe characters)
 from datetime import datetime, date as date_type
 
 from app.api import deps
@@ -458,7 +460,43 @@ def export_sleep_data(
     else:
         period = "All time"                               # No date filter applied
 
-    # ── Step 5: Render the HTML email template and send it ────────────────
+    # ── Step 5: Base64-encode the CSV and build the email attachment ─────────
+    #
+    # Why Base64?
+    # Email protocols (SMTP) can only carry plain ASCII text. A CSV file is
+    # also text, but to attach it as a FILE (not inline text) we encode it
+    # using Base64 — a scheme that represents any bytes as printable ASCII.
+    # The GAS script then decodes it back with Utilities.base64Decode() and
+    # wraps it in a Blob object that MailApp.sendEmail() can attach to the email.
+    #
+    # Step-by-step:
+    #   csv_content            → Python string  (e.g. "Date,Score\n2024-01-01,78")
+    #   .encode("utf-8")       → Python bytes   (raw bytes representation)
+    #   base64.b64encode(...)  → Base64 bytes   (e.g. b"RGF0ZSxTY29y...")
+    #   .decode("ascii")       → ASCII string   (safe to include in JSON payload)
+    csv_b64 = base64.b64encode(csv_content.encode("utf-8")).decode("ascii")
+
+    # Build a safe, human-readable filename for the attachment.
+    # re.sub() replaces any character that is NOT a letter, digit, dash, or
+    # underscore with an underscore. This prevents filesystem-unsafe names.
+    # Examples:
+    #   "All time"                  → "smartsleep_All_time.csv"
+    #   "2024-01-01 → 2024-12-31"  → "smartsleep_2024-01-01_to_2024-12-31.csv"
+    safe_period = re.sub(r"[^\w\-]", "_", period.replace("→", "to"))
+    filename = f"smartsleep_{safe_period}.csv"
+
+    # The attachment dict format the GAS relay script expects.
+    # "fileName" is what appears in the email client (e.g. "smartsleep_All_time.csv").
+    # "mimeType" tells the email client how to open the file — "text/csv" means
+    #   the OS will offer to open it in Excel, Numbers, or Google Sheets.
+    # "data" is the Base64-encoded file content as a plain string.
+    attachment = {
+        "fileName": filename,
+        "mimeType": "text/csv",
+        "data":     csv_b64,
+    }
+
+    # ── Step 6: Render the HTML email body and send with attachment ────────
     # Import here (not at the top) to avoid a circular import risk at module load time
     from app.services.email_service import send_email, render_template
     from datetime import datetime as dt_cls
@@ -466,29 +504,33 @@ def export_sleep_data(
     # getattr(obj, "attr", default) safely reads an attribute — returns default if missing
     display_name = getattr(current_user, "full_name", None) or current_user.email.split("@")[0]
 
-    # strftime() formats a datetime as a string using format codes:
-    # %B = full month name ("April"), %d = zero-padded day ("01"), %Y = 4-digit year
+    # strftime() formats a datetime as a string:
+    # %B = full month name, %d = zero-padded day, %Y = 4-digit year
     export_date = dt_cls.utcnow().strftime("%B %d, %Y")  # e.g. "April 23, 2024"
 
-    # render_template() loads data_export.html and substitutes all {{KEY}} placeholders
+    # render_template() loads data_export.html and substitutes {{KEY}} placeholders.
+    # NOTE: we no longer pass CSV_DATA — the CSV is now sent as a file attachment,
+    # not embedded as raw text in the email body.
     html = render_template(
         "data_export.html",
-        NAME=display_name,                # {{NAME}} in the template
-        EMAIL=current_user.email,         # {{EMAIL}} in the template
-        PERIOD=period,                    # {{PERIOD}} — date range label
-        EXPORT_DATE=export_date,          # {{EXPORT_DATE}} — when the export was requested
-        TOTAL_NIGHTS=len(records),        # {{TOTAL_NIGHTS}} — record count
-        AVG_SCORE=avg_score,              # {{AVG_SCORE}} — average sleep score
-        BEST_SCORE=best_score,            # {{BEST_SCORE}}
-        WORST_SCORE=worst_score,          # {{WORST_SCORE}}
-        CSV_DATA=csv_content,             # {{CSV_DATA}} — the full multi-line CSV text
+        NAME=display_name,
+        EMAIL=current_user.email,
+        PERIOD=period,
+        EXPORT_DATE=export_date,
+        TOTAL_NIGHTS=len(records),
+        AVG_SCORE=avg_score,
+        BEST_SCORE=best_score,
+        WORST_SCORE=worst_score,
+        FILENAME=filename,            # {{FILENAME}} — shown in the "attached file" box
     )
 
-    # send_email() returns True on success (GAS returned 302), False on failure
+    # send_email() now accepts an `attachments` list. Passing [attachment] causes
+    # the GAS relay to include the CSV as a file attachment in the outgoing email.
     success = send_email(
         current_user.email,
         f"SmartSleep Data Export — {len(records)} nights ({period})",
         html,
+        attachments=[attachment],     # ← this is the new parameter
     )
 
     if not success:
@@ -499,5 +541,5 @@ def export_sleep_data(
             detail="Export generated but email delivery failed. Check that GOOGLE_SCRIPT_URL and EMAIL_TOKEN are configured on the server.",
         )
 
-    # Success — return a confirmation message that the Flutter app displays in a SnackBar
+    # Success — return a confirmation message that the Flutter app shows in a SnackBar
     return {"message": f"Export sent to {current_user.email} ({len(records)} nights)"}

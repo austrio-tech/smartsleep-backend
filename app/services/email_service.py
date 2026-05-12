@@ -28,7 +28,7 @@ Usage:
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List  # List is needed for the attachments type hint
 
 import requests
 from app.config import settings
@@ -65,8 +65,13 @@ def render_template(name: str, **kwargs) -> str:
     return html
 
 
-def send_email(to: str, subject: str, html_body: str) -> bool:
-    """Send an HTML email via the Google Apps Script relay.
+def send_email(
+    to: str,
+    subject: str,
+    html_body: str,
+    attachments: Optional[List[dict]] = None,
+) -> bool:
+    """Send an HTML email (with optional file attachments) via the Google Apps Script relay.
 
     *** FIX (root cause of emails not arriving) ***
     Previously used allow_redirects=True, which caused requests to follow
@@ -80,12 +85,28 @@ def send_email(to: str, subject: str, html_body: str) -> bool:
     False without raising — check the server logs if emails aren't arriving.
 
     Args:
-        to:        Recipient email address.
-        subject:   Email subject line.
-        html_body: Full HTML content for the email body.
+        to:          Recipient email address.
+        subject:     Email subject line.
+        html_body:   Full HTML content for the email body.
+        attachments: Optional list of file attachment dicts. Each dict must have:
+                       "fileName" (str)  – name shown in the email, e.g. "export.csv"
+                       "mimeType" (str)  – file type, e.g. "text/csv" or "application/pdf"
+                       "data"     (str)  – the file content Base64-encoded as an ASCII string
+                     The GAS script decodes this with Utilities.base64Decode() and passes
+                     the resulting Blob to MailApp.sendEmail(attachments=[...]).
+                     Defaults to None (no attachments) for all regular notification emails.
 
     Returns:
         True on success (GAS returned 302), False on failure.
+
+    Example with attachment:
+        csv_b64 = base64.b64encode(csv_text.encode("utf-8")).decode("ascii")
+        send_email(
+            "user@example.com",
+            "Your export",
+            html,
+            attachments=[{"fileName": "data.csv", "mimeType": "text/csv", "data": csv_b64}],
+        )
     """
     # Guard: if email env vars are not configured, log clearly and skip
     if not settings.google_script_url or not settings.email_token:
@@ -103,7 +124,10 @@ def send_email(to: str, subject: str, html_body: str) -> bool:
         "subject":     subject,               # The subject line of the email
         "body":        html_body,             # The full HTML content of the email body
         "name":        settings.email_name,   # "From" display name (e.g. "Smart Sleep Service")
-        "attachments": [],                    # No file attachments for regular emails
+        # attachments is a list of dicts. For regular emails this is [].
+        # For the export email it contains one dict with the base64-encoded CSV file.
+        # `attachments or []` converts None (the default) into an empty list safely.
+        "attachments": attachments or [],
     }
 
     try:

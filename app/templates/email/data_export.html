@@ -64,28 +64,38 @@
         </table>
       </td></tr>
 
-      <!-- Instructions -->
+      <!-- Attached file box -->
       <tr><td style="padding:24px 40px 8px;">
-        <table width="100%" cellpadding="14" style="background:#EFF6FF;border-radius:12px;border:1px solid #BFDBFE;">
-          <tr><td>
-            <p style="margin:0;font-size:13px;color:#1E40AF;line-height:1.6;">
-              <strong>How to use your data:</strong><br/>
-              Copy the CSV text below, paste it into <strong>Google Sheets</strong> (File → Import → Paste) or
-              <strong>Excel</strong> (Data → From Text). Each row is one night of sleep.
-            </p>
-          </td></tr>
+        <h2 style="margin:0 0 12px;font-size:13px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:1px;">Attached File</h2>
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#F8FAFC;border-radius:14px;border:1.5px solid #E2E8F0;">
+          <tr>
+            <!-- CSV icon -->
+            <td style="width:56px;padding:18px 0 18px 20px;vertical-align:middle;">
+              <div style="width:44px;height:44px;background:linear-gradient(135deg,#6366F1,#8B5CF6);border-radius:10px;display:flex;align-items:center;justify-content:center;text-align:center;line-height:44px;font-size:20px;">
+                &#128196;
+              </div>
+            </td>
+            <!-- Filename + type -->
+            <td style="padding:18px 16px;vertical-align:middle;">
+              <div style="font-size:14px;font-weight:700;color:#1E293B;">{{FILENAME}}</div>
+              <div style="font-size:12px;color:#94A3B8;margin-top:2px;">CSV Spreadsheet &nbsp;·&nbsp; {{TOTAL_NIGHTS}} rows</div>
+            </td>
+          </tr>
         </table>
       </td></tr>
 
-      <!-- CSV data block -->
+      <!-- How to open instructions -->
       <tr><td style="padding:16px 40px 32px;">
-        <h2 style="margin:0 0 12px;font-size:13px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:1px;">CSV Data</h2>
-        <div style="background:#0F172A;border-radius:12px;padding:20px;overflow:auto;">
-          <pre style="margin:0;font-family:'Courier New',Courier,monospace;font-size:11px;color:#E2E8F0;white-space:pre;line-height:1.6;">{{CSV_DATA}}</pre>
-        </div>
-        <p style="margin:12px 0 0;font-size:12px;color:#94A3B8;text-align:center;">
-          {{TOTAL_NIGHTS}} record(s) exported &nbsp;·&nbsp; {{PERIOD}}
-        </p>
+        <table width="100%" cellpadding="14" style="background:#EFF6FF;border-radius:12px;border:1px solid #BFDBFE;">
+          <tr><td>
+            <p style="margin:0;font-size:13px;color:#1E40AF;line-height:1.7;">
+              <strong>How to open your export:</strong><br/>
+              &#9642; <strong>Google Sheets</strong> — open the attachment, then choose "Open with Google Sheets"<br/>
+              &#9642; <strong>Excel</strong> — save the attachment, then double-click it to open<br/>
+              &#9642; <strong>Numbers (Mac/iPhone)</strong> — tap the attachment, then tap "Open in Numbers"
+            </p>
+          </td></tr>
+        </table>
       </td></tr>
 
       <!-- Footer -->
